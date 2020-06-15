@@ -11,8 +11,9 @@ var _ order.Storage = &OrderStorage{}
 type OrderStorage struct {
 	statementStorage
 
-	createStmt *sql.Stmt
-	getAllStmt *sql.Stmt
+	createStmt   *sql.Stmt
+	getAllStmt   *sql.Stmt
+	findByIDStmt *sql.Stmt
 }
 
 func NewOrderStorage(db *DB) (*OrderStorage, error) {
@@ -20,7 +21,8 @@ func NewOrderStorage(db *DB) (*OrderStorage, error) {
 
 	stmts := []stmt{
 		{Query: createOrderQuery, Dst: &s.createStmt},
-		{Query: getAllOrderQuery, Dst: &s.getAllStmt},
+		{Query: getAllOrdersQuery, Dst: &s.getAllStmt},
+		{Query: findOrderByIDQuery, Dst: &s.findByIDStmt},
 	}
 
 	if err := s.initStatements(stmts); err != nil {
@@ -45,7 +47,7 @@ func (s *OrderStorage) Create(o *order.Order) error {
 	return nil
 }
 
-const getAllOrderQuery = "SELECT id, " + orderFields + " FROM orders"
+const getAllOrdersQuery = "SELECT id, " + orderFields + " FROM orders"
 
 func (s *OrderStorage) GetAll() ([]*order.Order, error) {
 	rows, err := s.getAllStmt.Query()
@@ -73,4 +75,21 @@ func (s *OrderStorage) GetAll() ([]*order.Order, error) {
 	}
 
 	return orders, nil
+}
+
+const findOrderByIDQuery = "SELECT id, " + orderFields + " FROM orders WHERE id=$1"
+
+func (s *OrderStorage) FindByID(id int64) (*order.Order, error) {
+	var o order.Order
+
+	row := s.findByIDStmt.QueryRow(id)
+	if err := scanOrder(row, &o); err != nil {
+		if err == sql.ErrNoRows {
+			return &o, nil
+		}
+
+		return &o, errors.Wrap(err, "can't scan order")
+	}
+
+	return &o, nil
 }

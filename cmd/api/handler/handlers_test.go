@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"safedeal-backend-trainee/internal/ftime"
 	"safedeal-backend-trainee/internal/order"
 	"safedeal-backend-trainee/internal/product"
 	"safedeal-backend-trainee/pkg/log/logger"
 	"strings"
 	"testing"
+	"time"
 )
 
 type mockProductStorage struct {
@@ -34,6 +36,10 @@ func (m mockOrderStorage) Create(o *order.Order) error {
 
 func (m mockOrderStorage) GetAll() ([]*order.Order, error) {
 	return m.oo, nil
+}
+
+func (m mockOrderStorage) FindByID(id int64) (*order.Order, error) {
+	return m.o, nil
 }
 
 type mockLogger struct {
@@ -89,6 +95,42 @@ func TestCostOfDeliveryCorrect(t *testing.T) {
 
 	expected := `{"destination":"Большая Садовая, 302-бис, пятый этаж, кв. № 50","from":"Тверской бульвар, 25"`
 	if !respContains(rr.Body.String(), expected) {
+		t.Errorf("costOfDelivery handler returned unexpected body: got %v, want %v",
+			rr.Body.String(), expected)
+	}
+}
+
+func TestCostOfDeliveryNotFound(t *testing.T) {
+	json := []byte(`{"destination" : "Большая Садовая, 302-бис, пятый этаж, кв. № 50"}`)
+	req, err := http.NewRequest("POST", "/api/v1/products/1/cost-of-delivery", bytes.NewBuffer(json))
+	if err != nil {
+		t.Fatalf("can't create request %v", err)
+	}
+
+	l := new(mockLogger)
+	mockProductStorage := new(mockProductStorage)
+	mockOrderStorage := new(mockOrderStorage)
+
+	p := &product.Product{
+		ID: 0, // zero value => can't find product in storage
+	}
+
+	mockProductStorage.p = p
+
+	h := New(mockProductStorage, mockOrderStorage, l)
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(MWError(h.costOfDelivery, l))
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusNotFound {
+		t.Errorf("costOfDelivery handler returned wrong status code: got %v, want %v",
+			status, http.StatusNotFound)
+	}
+
+	expected := `{"error":"can't find product with id= 1"}`
+	if rr.Body.String() != expected {
 		t.Errorf("costOfDelivery handler returned unexpected body: got %v, want %v",
 			rr.Body.String(), expected)
 	}
@@ -298,6 +340,47 @@ func TestCreateOrderIncorrectJSON(t *testing.T) {
 	}
 }
 
+func TestCreateOrderNotFound(t *testing.T) {
+	json := []byte(`{"destination" : "Большая Садовая, 302-бис, пятый этаж, кв. № 50", "time" : "2020-06-15T13:30:00Z"}`)
+	req, err := http.NewRequest("POST", "/api/v1/products/1/order", bytes.NewBuffer(json))
+	if err != nil {
+		t.Fatalf("can't create request %v", err)
+	}
+
+	l := new(mockLogger)
+	mockProductStorage := new(mockProductStorage)
+	mockOrderStorage := new(mockOrderStorage)
+
+	p := &product.Product{
+		ID: 0, // zero value => can't find product in storage
+	}
+
+	o := &order.Order{
+		ID: 5,
+	}
+
+	mockProductStorage.p = p
+	mockOrderStorage.o = o
+
+	h := New(mockProductStorage, mockOrderStorage, l)
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(MWError(h.createOrder, l))
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusNotFound {
+		t.Errorf("createOrder handler returned wrong status code: got %v, want %v",
+			status, http.StatusNotFound)
+	}
+
+	expected := `{"error":"can't find product with id= 1"}`
+	if !respContains(rr.Body.String(), expected) {
+		t.Errorf("createOrder handler returned unexpected body: got %v, want %v",
+			rr.Body.String(), expected)
+	}
+}
+
 func TestGetOrdersCorrect(t *testing.T) {
 	req, err := http.NewRequest("GET", "/api/v1/orders", nil)
 	if err != nil {
@@ -330,6 +413,164 @@ func TestGetOrdersCorrect(t *testing.T) {
 	expected := `[{"id":1,"product_id":1,"name":"Первое название"},{"id":2,"product_id":1,"name":"Второе название"}]`
 	if rr.Body.String() != expected {
 		t.Errorf("getOrders handler returned unexpected body: got %v, want %v",
+			rr.Body.String(), expected)
+	}
+}
+
+func TestGetOrderCorrect(t *testing.T) {
+	req, err := http.NewRequest("GET", "/api/v1/orders/1", nil)
+	if err != nil {
+		t.Fatalf("can't create request %v", err)
+	}
+
+	l := new(mockLogger)
+	mockProductStorage := new(mockProductStorage)
+	mockOrderStorage := new(mockOrderStorage)
+
+	place := "Большой Патриарший пер., 7, строение 1"
+
+	p := &product.Product{
+		ID:     1,
+		Name:   "Сноуборд",
+		Width:  40.5,
+		Length: 143,
+		Height: 20,
+		Weight: 3.3,
+		Place:  place,
+	}
+
+	str := "2020-06-17T15:30:00Z"
+	tt, _ := time.Parse(ftime.Layout, str)
+	time := ftime.New(tt)
+
+	o := &order.Order{
+		ID:          2,
+		ProductID:   1,
+		Name:        "Сноуборд",
+		From:        place,
+		Destination: "Большая Садовая, 302-бис, пятый этаж, кв. № 50",
+		Time:        time,
+	}
+
+	mockProductStorage.p = p
+	mockOrderStorage.o = o
+
+	h := New(mockProductStorage, mockOrderStorage, l)
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(MWError(h.getOrder, l))
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("getOrder handler returned wrong status code: got %v, want %v",
+			status, http.StatusOK)
+	}
+
+	expected := `{"id":2,"product":{"id":1,"name":"Сноуборд","width":40.5,"length":143,"height":20,"weight":3.3,` +
+		`"place":"Большой Патриарший пер., 7, строение 1"},"from":"Большой Патриарший пер., 7, строение 1",` +
+		`"destination":"Большая Садовая, 302-бис, пятый этаж, кв. № 50","time":"2020-06-17T15:30:00Z"}`
+	if !respContains(rr.Body.String(), expected) {
+		t.Errorf("getOrder handler returned unexpected body: got %v, want %v",
+			rr.Body.String(), expected)
+	}
+}
+
+func TestGetOrderNotFoundOrder(t *testing.T) {
+	req, err := http.NewRequest("GET", "/api/v1/orders/1", nil)
+	if err != nil {
+		t.Fatalf("can't create request %v", err)
+	}
+
+	l := new(mockLogger)
+	mockProductStorage := new(mockProductStorage)
+	mockOrderStorage := new(mockOrderStorage)
+
+	place := "Большой Патриарший пер., 7, строение 1"
+
+	p := &product.Product{
+		ID:     1,
+		Name:   "Сноуборд",
+		Width:  40.5,
+		Length: 143,
+		Height: 20,
+		Weight: 3.3,
+		Place:  place,
+	}
+
+	o := &order.Order{
+		ID: 0, // zero value => can't find order in storage
+	}
+
+	mockProductStorage.p = p
+	mockOrderStorage.o = o
+
+	h := New(mockProductStorage, mockOrderStorage, l)
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(MWError(h.getOrder, l))
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusNotFound {
+		t.Errorf("getOrder handler returned wrong status code: got %v, want %v",
+			status, http.StatusNotFound)
+	}
+
+	expected := `{"error":"can't find order with id= 1"}`
+	if !respContains(rr.Body.String(), expected) {
+		t.Errorf("getOrder handler returned unexpected body: got %v, want %v",
+			rr.Body.String(), expected)
+	}
+}
+
+func TestGetOrderNotFoundProduct(t *testing.T) {
+	req, err := http.NewRequest("GET", "/api/v1/orders/1", nil)
+	if err != nil {
+		t.Fatalf("can't create request %v", err)
+	}
+
+	l := new(mockLogger)
+	mockProductStorage := new(mockProductStorage)
+	mockOrderStorage := new(mockOrderStorage)
+
+	place := "Большой Патриарший пер., 7, строение 1"
+
+	p := &product.Product{
+		ID:     0, // zero value => can't find product in storage
+	}
+
+	str := "2020-06-17T15:30:00Z"
+	tt, _ := time.Parse(ftime.Layout, str)
+	time := ftime.New(tt)
+
+	o := &order.Order{
+		ID:          2,
+		ProductID:   1,
+		Name:        "Сноуборд",
+		From:        place,
+		Destination: "Большая Садовая, 302-бис, пятый этаж, кв. № 50",
+		Time:        time,
+	}
+
+	mockProductStorage.p = p
+	mockOrderStorage.o = o
+
+	h := New(mockProductStorage, mockOrderStorage, l)
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(MWError(h.getOrder, l))
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusNotFound {
+		t.Errorf("getOrder handler returned wrong status code: got %v, want %v",
+			status, http.StatusNotFound)
+	}
+
+	expected := `{"error":"can't find product with id= 1"}`
+	if !respContains(rr.Body.String(), expected) {
+		t.Errorf("getOrder handler returned unexpected body: got %v, want %v",
 			rr.Body.String(), expected)
 	}
 }

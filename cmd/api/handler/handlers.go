@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"safedeal-backend-trainee/internal/ehttp"
+	"safedeal-backend-trainee/internal/ftime"
 	"safedeal-backend-trainee/internal/order"
 	"safedeal-backend-trainee/internal/product"
 	"strconv"
@@ -37,6 +38,12 @@ func (h *Handler) costOfDelivery(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		detail := fmt.Sprintf("can't find product with id= %v: %v", id, err)
 		return ehttp.InternalServerErr(detail)
+	}
+
+	if product.ID == BottomLineValidID {
+		msg := fmt.Sprintf("can't find product with id= %v", id)
+		detail := fmt.Sprintf("%v: %v", msg, err)
+		return ehttp.NotFoundErr(msg, detail)
 	}
 
 	price := calcPrice()
@@ -106,18 +113,24 @@ func (h *Handler) createOrder(w http.ResponseWriter, r *http.Request) error {
 		return ehttp.JSONUnmarshalErr(err)
 	}
 
-	productID, err := getIDFromRequest(r)
+	id, err := getIDFromRequest(r)
 	if err != nil {
 		return err
 	}
 
-	product, err := h.productStorage.FindByID(productID)
+	product, err := h.productStorage.FindByID(id)
 	if err != nil {
-		detail := fmt.Sprintf("can't find product with productID= %v: %v", productID, err)
+		detail := fmt.Sprintf("can't find product with productID= %v: %v", id, err)
 		return ehttp.InternalServerErr(detail)
 	}
 
-	order := NewOrder(product, info.Address, &info.Time)
+	if product.ID == BottomLineValidID {
+		msg := fmt.Sprintf("can't find product with id= %v", id)
+		detail := fmt.Sprintf("%v: %v", msg, err)
+		return ehttp.NotFoundErr(msg, detail)
+	}
+
+	order := NewOrder(product, info.Address, info.Time)
 
 	err = h.orderStorage.Create(order)
 	if err != nil {
@@ -127,20 +140,20 @@ func (h *Handler) createOrder(w http.ResponseWriter, r *http.Request) error {
 
 	err = respondJSON(w, order)
 	if err != nil {
-		detail := fmt.Sprintf("can't respond json with order info: %v", err)
+		detail := fmt.Sprintf("can't respond json with order's info: %v", err)
 		return ehttp.InternalServerErr(detail)
 	}
 
 	return nil
 }
 
-func NewOrder(p *product.Product, dest string, t *time.Time) *order.Order {
+func NewOrder(p *product.Product, dest string, t time.Time) *order.Order {
 	return &order.Order{
 		ProductID:   p.ID,
 		Name:        p.Name,
 		From:        p.Place,
 		Destination: dest,
-		Time:        t,
+		Time:        ftime.New(t),
 	}
 }
 
@@ -172,6 +185,57 @@ func removeExtraInfo(old []*order.Order) []*order.Order {
 	}
 
 	return res
+}
+
+func (h *Handler) getOrder(w http.ResponseWriter, r *http.Request) error {
+	orderID, err := getIDFromRequest(r)
+	if err != nil {
+		return err
+	}
+
+	order, err := h.orderStorage.FindByID(orderID)
+	if err != nil {
+		detail := fmt.Sprintf("can't find order with ID = %v: %v", orderID, err)
+		return ehttp.InternalServerErr(detail)
+	}
+
+	if order.ID == BottomLineValidID {
+		msg := fmt.Sprintf("can't find order with id= %v", orderID)
+		detail := fmt.Sprintf("%v: %v", msg, err)
+		return ehttp.NotFoundErr(msg, detail)
+	}
+
+	pr, err := h.productStorage.FindByID(order.ProductID)
+	if err != nil {
+		detail := fmt.Sprintf("can't find product: %v", err)
+		return ehttp.InternalServerErr(detail)
+	}
+
+	if pr.ID == BottomLineValidID {
+		msg := fmt.Sprintf("can't find product with id= %v", order.ProductID)
+		detail := fmt.Sprintf("%v: %v", msg, err)
+		return ehttp.NotFoundErr(msg, detail)
+	}
+
+	err = respondJSON(w, struct {
+		ID          int64            `json:"id"`
+		Product     product.Product  `json:"product"`
+		From        string           `json:"from"`
+		Destination string           `json:"destination"`
+		Time        ftime.FormatTime `json:"time"`
+	}{
+		ID:          order.ID,
+		Product:     *pr,
+		From:        order.From,
+		Destination: order.Destination,
+		Time:        *order.Time,
+	})
+	if err != nil {
+		detail := fmt.Sprintf("can't respond json with order's detailed info: %v", err)
+		return ehttp.InternalServerErr(detail)
+	}
+
+	return nil
 }
 
 func respondJSON(w http.ResponseWriter, payload interface{}) error {

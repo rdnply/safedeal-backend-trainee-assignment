@@ -47,3 +47,11 @@ func InternalServerErr(detail string) error {
 		Detail:     detail,
 	}
 }
+
+func NotFoundErr(msg string, detail string) error {
+	return HTTPError{
+		Msg:        msg,
+		StatusCode: http.StatusNotFound,
+		Detail:     detail,
+	}
+}
