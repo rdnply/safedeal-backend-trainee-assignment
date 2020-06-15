@@ -12,14 +12,19 @@ const (
 
 type ErrorMsg struct {
 	Detail string `json:"error"`
+	Status int    `json:"-"`
+}
+
+func (e ErrorMsg) Error() string {
+	return e.Detail
 }
 
 func HTTPError(msg string, status int, w http.ResponseWriter) {
-	Error(ErrorMsg{msg}, status, w)
+	Error(ErrorMsg{msg, status}, w)
 }
 
-func Error(msg ErrorMsg, status int, w http.ResponseWriter) {
-	w.WriteHeader(status)
+func Error(msg ErrorMsg, w http.ResponseWriter) {
+	w.WriteHeader(msg.Status)
 
 	if msg.Detail != "" {
 		w.Header().Add(ContentTypeHeader, JSONContentType)

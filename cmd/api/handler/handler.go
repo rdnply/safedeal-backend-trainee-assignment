@@ -7,7 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"math/rand"
 	"net/http"
-	"safedeal-backend-trainee/cmd/api/render"
+	"safedeal-backend-trainee/internal/ehttp"
 	"safedeal-backend-trainee/internal/order"
 	"safedeal-backend-trainee/internal/product"
 	"safedeal-backend-trainee/pkg/log/logger"
@@ -33,15 +33,47 @@ func New(p product.Storage, o order.Storage, l logger.Logger) *Handler {
 func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Post("/products/{id}/cost-of-delivery", h.costOfDelivery)
+		r.Post("/products/{id}/cost-of-delivery", MWError(h.costOfDelivery, h.logger))
+		r.Post("/products/{id}/order", MWError(h.createOrder, h.logger))
 	})
 
 	return r
 }
 
+type handlerFunc func(http.ResponseWriter, *http.Request) error
+
+func MWError(h handlerFunc, l logger.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := h(w, r); err != nil {
+
+			e, ok := err.(ehttp.HTTPError)
+			if !ok {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			l.Errorf(e.Msg)
+			w.WriteHeader(e.StatusCode)
+
+			if e.Msg != "" {
+				w.Header().Add("Content-Type", "application/json")
+
+				out, err := json.Marshal(e)
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				// no need to handle error here
+				_, _ = w.Write(out)
+			}
+		}
+	}
+}
+
 const BottomLineValidID = 0
 
-func (h *Handler) costOfDelivery(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) costOfDelivery(w http.ResponseWriter, r *http.Request) error {
 	type destination struct {
 		Address string `json:"destination"`
 	}
@@ -50,34 +82,18 @@ func (h *Handler) costOfDelivery(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewDecoder(r.Body).Decode(&d)
 	if err != nil {
-		h.logger.Errorf("can't unmarshal input json: %v", err)
-		render.HTTPError("", http.StatusBadRequest, w)
-
-		return
+		return ehttp.JSONUmmarshalErr(err)
 	}
 
-	id, err := IDFromParams(r)
+	id, err := getIDFromRequest(r)
 	if err != nil {
-		h.logger.Errorf("can't get ID from URL params: %v", err)
-		render.HTTPError("", http.StatusInternalServerError, w)
-
-		return
-	}
-
-	if id <= BottomLineValidID {
-		h.logger.Errorf("don't valid id: %v", id)
-		msg := fmt.Sprintf("incorrect id: %v", id)
-		render.HTTPError(msg, http.StatusBadRequest, w)
-
-		return
+		return err
 	}
 
 	product, err := h.productStorage.FindByID(id)
 	if err != nil {
-		h.logger.Errorf("can't find product with id= %v: %v", id, err)
-		render.HTTPError("", http.StatusInternalServerError, w)
-
-		return
+		detail := fmt.Sprintf("can't find product with id= %v: %v", id, err)
+		return ehttp.InternalServerErr(detail)
 	}
 
 	price := calcPrice(product, d.Address)
@@ -88,11 +104,25 @@ func (h *Handler) costOfDelivery(w http.ResponseWriter, r *http.Request) {
 		"price":       price,
 	})
 	if err != nil {
-		h.logger.Errorf("can't respond json with delivery info: %v", err)
-		render.HTTPError("", http.StatusInternalServerError, w)
-
-		return
+		detail := fmt.Sprintf("can't respond json with delivery info: %v", err)
+		return ehttp.InternalServerErr(detail)
 	}
+
+	return nil
+}
+
+func getIDFromRequest(r *http.Request) (int64, error) {
+	id, err := IDFromParams(r)
+	if err != nil {
+		detail := fmt.Sprintf("can't get ID from URL params: %v", err)
+		return -1, ehttp.InternalServerErr(detail)
+	}
+
+	if id <= BottomLineValidID {
+		return -1, ehttp.IncorrectID(id)
+	}
+
+	return id, nil
 }
 
 // calcPrice возвращает цену доставки
@@ -118,6 +148,10 @@ func IDFromParams(r *http.Request) (int64, error) {
 	}
 
 	return id, nil
+}
+
+func (h *Handler) createOrder(w http.ResponseWriter, r *http.Request) error {
+	return nil
 }
 
 func respondJSON(w http.ResponseWriter, payload interface{}) error {

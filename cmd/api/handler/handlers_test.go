@@ -72,7 +72,7 @@ func TestCostOfDeliveryCorrect(t *testing.T) {
 	h := New(mockProductStorage, mockOrderStorage, l)
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(h.costOfDelivery)
+	handler := http.HandlerFunc(MWError(h.costOfDelivery, l))
 
 	handler.ServeHTTP(rr, req)
 
@@ -111,7 +111,7 @@ func TestCostOfDeliveryIncorrectID(t *testing.T) {
 	h := New(mockProductStorage, mockOrderStorage, l)
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(h.costOfDelivery)
+	handler := http.HandlerFunc(MWError(h.costOfDelivery, l))
 
 	handler.ServeHTTP(rr, req)
 
@@ -151,7 +151,7 @@ func TestCostOfDeliveryIncorrectJSON(t *testing.T) {
 	h := New(mockProductStorage, mockOrderStorage, l)
 
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(h.costOfDelivery)
+	handler := http.HandlerFunc(MWError(h.costOfDelivery, l))
 
 	handler.ServeHTTP(rr, req)
 
