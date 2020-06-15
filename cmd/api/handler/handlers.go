@@ -39,12 +39,12 @@ func (h *Handler) costOfDelivery(w http.ResponseWriter, r *http.Request) error {
 		return ehttp.InternalServerErr(detail)
 	}
 
-	price := calcPrice(product, d.Address)
+	price := calcPrice()
 
 	err = respondJSON(w, map[string]interface{}{
-		"from":      product.Place,
+		"from":        product.Place,
 		"destination": d.Address,
-		"price":     price,
+		"price":       price,
 	})
 	if err != nil {
 		detail := fmt.Sprintf("can't respond json with delivery info: %v", err)
@@ -70,7 +70,7 @@ func getIDFromRequest(r *http.Request) (int64, error) {
 
 // calcPrice возвращает цену доставки
 // (цена - случайное число в диапазоне [min * fact, max * fact])
-func calcPrice(product *product.Product, dest string) int {
+func calcPrice() int {
 	const min = 3
 	const max = 20
 	const fact = 100
@@ -117,7 +117,7 @@ func (h *Handler) createOrder(w http.ResponseWriter, r *http.Request) error {
 		return ehttp.InternalServerErr(detail)
 	}
 
-	order := NewOrder(product, info.Address, info.Time)
+	order := NewOrder(product, info.Address, &info.Time)
 
 	err = h.orderStorage.Create(order)
 	if err != nil {
@@ -134,7 +134,7 @@ func (h *Handler) createOrder(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func NewOrder(p *product.Product, dest string, t time.Time) *order.Order {
+func NewOrder(p *product.Product, dest string, t *time.Time) *order.Order {
 	return &order.Order{
 		ProductID:   p.ID,
 		Name:        p.Name,
@@ -142,6 +142,36 @@ func NewOrder(p *product.Product, dest string, t time.Time) *order.Order {
 		Destination: dest,
 		Time:        t,
 	}
+}
+
+func (h *Handler) getOrders(w http.ResponseWriter, r *http.Request) error {
+	orders, err := h.orderStorage.GetAll()
+	if err != nil {
+		detail := fmt.Sprintf("can't get all orders: %v", err)
+		return ehttp.InternalServerErr(detail)
+	}
+
+	orders = removeExtraInfo(orders)
+
+	err = respondJSON(w, orders)
+	if err != nil {
+		detail := fmt.Sprintf("can't respond json with all orders info: %v", err)
+		return ehttp.InternalServerErr(detail)
+	}
+
+	return nil
+}
+
+func removeExtraInfo(old []*order.Order) []*order.Order {
+	res := make([]*order.Order, len(old))
+	copy(res, old)
+	for _, o := range res {
+		o.From = ""
+		o.Destination = ""
+		o.Time = nil
+	}
+
+	return res
 }
 
 func respondJSON(w http.ResponseWriter, payload interface{}) error {

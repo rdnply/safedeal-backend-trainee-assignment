@@ -29,6 +29,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/products/{id}/cost-of-delivery", MWError(h.costOfDelivery, h.logger))
 		r.Post("/products/{id}/order", MWError(h.createOrder, h.logger))
+		r.Get("/orders", MWError(h.getOrders, h.logger))
 	})
 
 	return r

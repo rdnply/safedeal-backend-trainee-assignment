@@ -22,13 +22,18 @@ func (m mockProductStorage) FindByID(id int64) (*product.Product, error) {
 }
 
 type mockOrderStorage struct {
-	o *order.Order
+	o  *order.Order
+	oo []*order.Order
 	order.Storage
 }
 
 func (m mockOrderStorage) Create(o *order.Order) error {
 	o.ID = m.o.ID
 	return nil
+}
+
+func (m mockOrderStorage) GetAll() ([]*order.Order, error) {
+	return m.oo, nil
 }
 
 type mockLogger struct {
@@ -289,6 +294,42 @@ func TestCreateOrderIncorrectJSON(t *testing.T) {
 	expected := ""
 	if rr.Body.String() != expected {
 		t.Errorf("createOrder handler returned unexpected body: got %v, want %v",
+			rr.Body.String(), expected)
+	}
+}
+
+func TestGetOrdersCorrect(t *testing.T) {
+	req, err := http.NewRequest("GET", "/api/v1/orders", nil)
+	if err != nil {
+		t.Fatalf("can't create request %v", err)
+	}
+
+	l := new(mockLogger)
+	mockProductStorage := new(mockProductStorage)
+	mockOrderStorage := new(mockOrderStorage)
+
+	orders := []*order.Order{
+		{ID: 1, ProductID: 1, Name: "Первое название"},
+		{ID: 2, ProductID: 1, Name: "Второе название"},
+	}
+
+	mockOrderStorage.oo = orders
+
+	h := New(mockProductStorage, mockOrderStorage, l)
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(MWError(h.getOrders, l))
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("getOrders handler returned wrong status code: got %v, want %v",
+			status, http.StatusOK)
+	}
+
+	expected := `[{"id":1,"product_id":1,"name":"Первое название"},{"id":2,"product_id":1,"name":"Второе название"}]`
+	if rr.Body.String() != expected {
+		t.Errorf("getOrders handler returned unexpected body: got %v, want %v",
 			rr.Body.String(), expected)
 	}
 }

@@ -12,6 +12,7 @@ type OrderStorage struct {
 	statementStorage
 
 	createStmt *sql.Stmt
+	getAllStmt *sql.Stmt
 }
 
 func NewOrderStorage(db *DB) (*OrderStorage, error) {
@@ -19,6 +20,7 @@ func NewOrderStorage(db *DB) (*OrderStorage, error) {
 
 	stmts := []stmt{
 		{Query: createOrderQuery, Dst: &s.createStmt},
+		{Query: getAllOrderQuery, Dst: &s.getAllStmt},
 	}
 
 	if err := s.initStatements(stmts); err != nil {
@@ -41,4 +43,34 @@ func (s *OrderStorage) Create(o *order.Order) error {
 	}
 
 	return nil
+}
+
+const getAllOrderQuery = "SELECT id, " + orderFields + " FROM orders"
+
+func (s *OrderStorage) GetAll() ([]*order.Order, error) {
+	rows, err := s.getAllStmt.Query()
+	if err != nil {
+		return nil, errors.Wrap(err, "can't exec query to get all orders")
+	}
+
+	defer rows.Close()
+
+	orders := make([]*order.Order, 0)
+
+	for rows.Next() {
+		var o order.Order
+
+		err = scanOrder(rows, &o)
+		if err != nil {
+			return nil, errors.Wrap(err, "can't scan row with order")
+		}
+
+		orders = append(orders, &o)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "rows contain error")
+	}
+
+	return orders, nil
 }
