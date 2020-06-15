@@ -12,7 +12,7 @@ type HTTPError struct {
 }
 
 func (h HTTPError) Error() string {
-	return h.Msg
+	return fmt.Sprintf("message: %v; status code: %v; detail: %v", h.Msg, h.StatusCode, h.Detail)
 }
 
 func New(msg string, status int, detail string) error {
@@ -32,7 +32,7 @@ func IncorrectID(id int64) error {
 	}
 }
 
-func JSONUmmarshalErr(err error) error {
+func JSONUnmarshalErr(err error) error {
 	return HTTPError{
 		Msg:        "",
 		StatusCode: http.StatusBadRequest,

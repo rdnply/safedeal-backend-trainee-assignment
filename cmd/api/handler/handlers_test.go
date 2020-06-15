@@ -27,6 +27,7 @@ type mockOrderStorage struct {
 }
 
 func (m mockOrderStorage) Create(o *order.Order) error {
+	o.ID = m.o.ID
 	return nil
 }
 
@@ -163,6 +164,131 @@ func TestCostOfDeliveryIncorrectJSON(t *testing.T) {
 	expected := ""
 	if rr.Body.String() != expected {
 		t.Errorf("costOfDelivery handler returned unexpected body: got %v, want %v",
+			rr.Body.String(), expected)
+	}
+}
+
+func TestCreateOrderCorrect(t *testing.T) {
+	json := []byte(`{"destination" : "Большая Садовая, 302-бис, пятый этаж, кв. № 50", "time" : "2020-06-15T13:30:00Z"}`)
+	req, err := http.NewRequest("POST", "/api/v1/products/1/order", bytes.NewBuffer(json))
+	if err != nil {
+		t.Fatalf("can't create request %v", err)
+	}
+
+	l := new(mockLogger)
+	mockProductStorage := new(mockProductStorage)
+	mockOrderStorage := new(mockOrderStorage)
+
+	place := "Тверской бульвар, 25"
+
+	p := &product.Product{
+		ID:    1,
+		Name:  "Название",
+		Place: place,
+	}
+
+	o := &order.Order{
+		ID: 5,
+	}
+
+	mockProductStorage.p = p
+	mockOrderStorage.o = o
+
+	h := New(mockProductStorage, mockOrderStorage, l)
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(MWError(h.createOrder, l))
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("createOrder handler returned wrong status code: got %v, want %v",
+			status, http.StatusOK)
+	}
+
+	expected := `{"id":5,"product_id":1,"name":"Название","from":"Тверской бульвар, 25",` +
+		`"destination":"Большая Садовая, 302-бис, пятый этаж, кв. № 50","time":"2020-06-15T13:30:00Z"}`
+	if !respContains(rr.Body.String(), expected) {
+		t.Errorf("createOrder handler returned unexpected body: got %v, want %v",
+			rr.Body.String(), expected)
+	}
+}
+
+func TestCreateOrderIncorrectID(t *testing.T) {
+	json := []byte(`{"destination" : "Большая Садовая, 302-бис, пятый этаж, кв. № 50", "time" : "2020-06-15T13:30:00Z"}`)
+	req, err := http.NewRequest("POST", "/api/v1/products/-1/order", bytes.NewBuffer(json))
+	if err != nil {
+		t.Fatalf("can't create request %v", err)
+	}
+
+	l := new(mockLogger)
+	mockProductStorage := new(mockProductStorage)
+	mockOrderStorage := new(mockOrderStorage)
+
+	place := "Тверской бульвар, 25"
+
+	p := &product.Product{
+		ID:    1,
+		Place: place,
+	}
+
+	mockProductStorage.p = p
+
+	h := New(mockProductStorage, mockOrderStorage, l)
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(MWError(h.createOrder, l))
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusBadRequest {
+		t.Errorf("createOrder handler returned wrong status code: got %v, want %v",
+			status, http.StatusBadRequest)
+	}
+
+	expected := fmt.Sprintf("{\"error\":\"incorrect id: %v\"}", -1)
+	if rr.Body.String() != expected {
+		t.Errorf("createOrder handler returned unexpected body: got %v, want %v",
+			rr.Body.String(), expected)
+	}
+}
+
+func TestCreateOrderIncorrectJSON(t *testing.T) {
+	// body contains incorrect json(missing a open bracket)
+	json := []byte(`"destination" : "Большая Садовая, 302-бис, пятый этаж, кв. № 50", "time" : "2020-06-15T13:30:00Z"}`)
+	req, err := http.NewRequest("POST", "/api/v1/products/1/order", bytes.NewBuffer(json))
+	if err != nil {
+		t.Fatalf("can't create request %v", err)
+	}
+
+	l := new(mockLogger)
+	mockProductStorage := new(mockProductStorage)
+	mockOrderStorage := new(mockOrderStorage)
+
+	place := "Тверской бульвар, 25"
+
+	p := &product.Product{
+		ID:    1,
+		Place: place,
+	}
+
+	mockProductStorage.p = p
+
+	h := New(mockProductStorage, mockOrderStorage, l)
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(MWError(h.createOrder, l))
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusBadRequest {
+		t.Errorf("createOrder handler returned wrong status code: got %v, want %v",
+			status, http.StatusBadRequest)
+	}
+
+	expected := ""
+	if rr.Body.String() != expected {
+		t.Errorf("createOrder handler returned unexpected body: got %v, want %v",
 			rr.Body.String(), expected)
 	}
 }
