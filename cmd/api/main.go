@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -19,6 +20,10 @@ import (
 )
 
 func main() {
+	var port = flag.String("port", "5000", "The port which listen server")
+
+	flag.Parse()
+
 	logger := initLogger()
 
 	st, closers := initStorages(logger)
@@ -26,19 +31,15 @@ func main() {
 	defer handleClosers(logger, closers)
 
 	h := handler.New(st.p, st.o, logger)
-	srv := initServer(h, "", "5000")
+	go h.CleanupVisitors()
+	srv := initServer(h, "", *port)
 
 	const Duration = 5
 	go gracefulShutdown(srv, Duration*time.Second, logger)
 
+	logger.Infof("Server is running at %s", *port)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatal(err)
-	}
-}
-
-func handleCloser(l logger.Logger, resource string, closer io.Closer) {
-	if err := closer.Close(); err != nil {
-		l.Errorf("Can't close %q: %s", resource, err)
 	}
 }
 
@@ -96,7 +97,7 @@ func initStorages(logger logger.Logger) (*storages, map[string]io.Closer) {
 func initServer(h *handler.Handler, host string, port string) *http.Server {
 	r := routes(h)
 	addr := net.JoinHostPort(host, port)
-	srv := &http.Server{Addr: addr, Handler: r}
+	srv := &http.Server{Addr: addr, Handler: h.Limit(r)}
 
 	return srv
 }
@@ -106,7 +107,6 @@ func routes(h *handler.Handler) *chi.Mux {
 
 	const Duration = 60
 
-	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(Duration * time.Second))
 
