@@ -2,8 +2,9 @@ package postgres
 
 import (
 	"database/sql"
-	"github.com/pkg/errors"
 	"safedeal-backend-trainee/internal/product"
+
+	"github.com/pkg/errors"
 )
 
 var _ product.Storage = &ProductStorage{}

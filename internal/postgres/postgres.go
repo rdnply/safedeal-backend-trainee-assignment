@@ -38,7 +38,7 @@ func (d *DB) CheckConnection() error {
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		if err = d.Session.Ping(); err == nil {
 			break
-		}	
+		}
 
 		nextAttemptWait := time.Duration(attempt) * time.Second
 		d.Logger.Errorf("Attempt %d: can't establish a connection with the db, wait for %v: %s",
