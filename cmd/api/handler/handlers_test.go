@@ -168,7 +168,7 @@ func TestCostOfDeliveryIncorrectID(t *testing.T) {
 			status, http.StatusBadRequest)
 	}
 
-	expected := fmt.Sprintf("{\"error\":\"incorrect id: %v\"}", -1)
+	expected := fmt.Sprintf("{\"error\":\"incorrect id= %v\"}", -1)
 	if rr.Body.String() != expected {
 		t.Errorf("costOfDelivery handler returned unexpected body: got %v, want %v",
 			rr.Body.String(), expected)
@@ -248,13 +248,12 @@ func TestCreateOrderCorrect(t *testing.T) {
 
 	handler.ServeHTTP(rr, req)
 
-	if status := rr.Code; status != http.StatusOK {
+	if status := rr.Code; status != http.StatusCreated {
 		t.Errorf("createOrder handler returned wrong status code: got %v, want %v",
-			status, http.StatusOK)
+			status, http.StatusCreated)
 	}
 
-	expected := `{"id":5,"product_id":1,"name":"Название","from":"Тверской бульвар, 25",` +
-		`"destination":"Большая Садовая, 302-бис, пятый этаж, кв. № 50","time":"2020-06-15T13:30:00Z"}`
+	expected := ""
 	if !respContains(rr.Body.String(), expected) {
 		t.Errorf("createOrder handler returned unexpected body: got %v, want %v",
 			rr.Body.String(), expected)
@@ -293,7 +292,7 @@ func TestCreateOrderIncorrectID(t *testing.T) {
 			status, http.StatusBadRequest)
 	}
 
-	expected := fmt.Sprintf("{\"error\":\"incorrect id: %v\"}", -1)
+	expected := fmt.Sprintf("{\"error\":\"incorrect id= %v\"}", -1)
 	if rr.Body.String() != expected {
 		t.Errorf("createOrder handler returned unexpected body: got %v, want %v",
 			rr.Body.String(), expected)

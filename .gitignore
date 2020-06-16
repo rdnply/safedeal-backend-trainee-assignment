@@ -1,7 +1,5 @@
 *.csv
 *.txt
-*.json
-*.sql
 *.exe
 *.log
 
