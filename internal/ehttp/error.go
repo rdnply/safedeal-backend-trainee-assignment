@@ -24,7 +24,8 @@ func New(msg string, status int, detail string) error {
 }
 
 func IncorrectID(id int64) error {
-	msg := fmt.Sprintf("incorrect id: %v", id)
+	msg := fmt.Sprintf("incorrect id= %v", id)
+
 	return HTTPError{
 		Msg:        msg,
 		StatusCode: http.StatusBadRequest,

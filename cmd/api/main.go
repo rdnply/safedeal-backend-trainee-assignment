@@ -4,8 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
 	"io"
 	"log"
 	"net"
@@ -17,10 +15,13 @@ import (
 	"safedeal-backend-trainee/pkg/log/logger"
 	"syscall"
 	"time"
+
+	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 )
 
 func main() {
-	var port = flag.String("port", "5000", "The port which listen server")
+	var port = flag.String("port", "5000", "The port which server listen")
 
 	flag.Parse()
 
@@ -31,13 +32,13 @@ func main() {
 	defer handleClosers(logger, closers)
 
 	h := handler.New(st.p, st.o, logger)
-	go h.CleanupVisitors()
 	srv := initServer(h, "", *port)
 
 	const Duration = 5
 	go gracefulShutdown(srv, Duration*time.Second, logger)
 
 	logger.Infof("Server is running at %s", *port)
+
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
@@ -60,6 +61,7 @@ func initStorages(logger logger.Logger) (*storages, map[string]io.Closer) {
 	closers := make(map[string]io.Closer)
 
 	_ = os.Chdir("../..")
+
 	pwd, err := os.Getwd()
 	if err != nil {
 		logger.Fatalf("can't get path: %v", err)
@@ -97,7 +99,7 @@ func initStorages(logger logger.Logger) (*storages, map[string]io.Closer) {
 func initServer(h *handler.Handler, host string, port string) *http.Server {
 	r := routes(h)
 	addr := net.JoinHostPort(host, port)
-	srv := &http.Server{Addr: addr, Handler: h.Limit(r)}
+	srv := &http.Server{Addr: addr, Handler: r}
 
 	return srv
 }

@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/pkg/errors"
 	"math/rand"
 	"net/http"
 	"safedeal-backend-trainee/internal/ehttp"
@@ -13,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 const BottomLineValidID = 0
@@ -43,6 +44,7 @@ func (h *Handler) costOfDelivery(w http.ResponseWriter, r *http.Request) error {
 	if product.ID == BottomLineValidID {
 		msg := fmt.Sprintf("can't find product with id= %v", id)
 		detail := fmt.Sprintf("%v: %v", msg, err)
+
 		return ehttp.NotFoundErr(msg, detail)
 	}
 
@@ -78,12 +80,15 @@ func getIDFromRequest(r *http.Request) (int64, error) {
 // calcPrice возвращает цену доставки
 // (цена - случайное число в диапазоне [min * fact, max * fact])
 func calcPrice() int {
-	const min = 3
-	const max = 20
-	const fact = 100
+	const (
+		min  = 3
+		max  = 20
+		fact = 100
+	)
+
 	rand.Seed(time.Now().UnixNano())
 
-	return (rand.Intn(max-min+1) + min) * fact
+	return (rand.Intn(max-min+1) + min) * fact // nolint: gomnd
 }
 
 func IDFromParams(r *http.Request) (int64, error) {
@@ -127,6 +132,7 @@ func (h *Handler) createOrder(w http.ResponseWriter, r *http.Request) error {
 	if product.ID == BottomLineValidID {
 		msg := fmt.Sprintf("can't find product with id= %v", id)
 		detail := fmt.Sprintf("%v: %v", msg, err)
+
 		return ehttp.NotFoundErr(msg, detail)
 	}
 
@@ -138,11 +144,7 @@ func (h *Handler) createOrder(w http.ResponseWriter, r *http.Request) error {
 		return ehttp.InternalServerErr(detail)
 	}
 
-	err = respondJSON(w, order)
-	if err != nil {
-		detail := fmt.Sprintf("can't respond json with order's info: %v", err)
-		return ehttp.InternalServerErr(detail)
-	}
+	w.WriteHeader(http.StatusCreated)
 
 	return nil
 }
@@ -178,6 +180,7 @@ func (h *Handler) getOrders(w http.ResponseWriter, r *http.Request) error {
 func removeExtraInfo(old []*order.Order) []*order.Order {
 	res := make([]*order.Order, len(old))
 	copy(res, old)
+
 	for _, o := range res {
 		o.From = ""
 		o.Destination = ""
@@ -202,6 +205,7 @@ func (h *Handler) getOrder(w http.ResponseWriter, r *http.Request) error {
 	if order.ID == BottomLineValidID {
 		msg := fmt.Sprintf("can't find order with id= %v", orderID)
 		detail := fmt.Sprintf("%v: %v", msg, err)
+
 		return ehttp.NotFoundErr(msg, detail)
 	}
 
@@ -214,6 +218,7 @@ func (h *Handler) getOrder(w http.ResponseWriter, r *http.Request) error {
 	if pr.ID == BottomLineValidID {
 		msg := fmt.Sprintf("can't find product with id= %v", order.ProductID)
 		detail := fmt.Sprintf("%v: %v", msg, err)
+
 		return ehttp.NotFoundErr(msg, detail)
 	}
 

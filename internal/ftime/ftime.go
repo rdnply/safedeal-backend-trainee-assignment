@@ -57,11 +57,10 @@ func (f *FormatTime) Scan(value interface{}) error {
 		return err
 	}
 
-	if reflect.TypeOf(value) == nil {
-		return nil
-	} else {
+	if reflect.TypeOf(value) != nil {
 		t := t.Time.UTC()
 		s := t.Format(time.RFC3339)
+
 		t, err := time.Parse(Layout, s)
 		if err != nil {
 			return err
@@ -77,6 +76,33 @@ func (f *FormatTime) Scan(value interface{}) error {
 
 	return nil
 }
+
+//func (f *FormatTime) Scan(value interface{}) error {
+//	var t sql.NullTime
+//	if err := t.Scan(value); err != nil {
+//		return err
+//	}
+//
+//	if reflect.TypeOf(value) == nil {
+//		return nil
+//	} else {
+//		t := t.Time.UTC()
+//		s := t.Format(time.RFC3339)
+//		t, err := time.Parse(Layout, s)
+//		if err != nil {
+//			return err
+//		}
+//
+//		loc, err := time.LoadLocation("Local")
+//		if err != nil {
+//			return err
+//		}
+//
+//		f.Time = t.In(loc)
+//	}
+//
+//	return nil
+//}
 
 func (f FormatTime) Value() (driver.Value, error) {
 	loc, err := time.LoadLocation("Local")

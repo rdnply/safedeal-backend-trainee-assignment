@@ -537,7 +537,7 @@ func TestGetOrderNotFoundProduct(t *testing.T) {
 	place := "Большой Патриарший пер., 7, строение 1"
 
 	p := &product.Product{
-		ID:     0, // zero value => can't find product in storage
+		ID: 0, // zero value => can't find product in storage
 	}
 
 	str := "2020-06-17T15:30:00Z"
